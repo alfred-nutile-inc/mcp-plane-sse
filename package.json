@@ -3,22 +3,27 @@
   "version": "0.1.4",
   "description": "The Plane MCP Server is a Model Context Protocol (MCP) server that provides seamless integration with Plane APIs, enabling projects, work items, and automations capabilities for develops and AI interfaces.",
   "bin": {
-    "plane-mcp-server": "./build/index.js"
+    "plane-mcp-server": "./build/index.js",
+    "plane-mcp-sse-server": "./build/sse-server.js"
   },
   "type": "module",
   "author": "engineering@plane.so",
   "scripts": {
-    "build": "rm -rf build && tsc && chmod 755 build/index.js",
+    "build": "rm -rf build && tsc && chmod 755 build/index.js && chmod 755 build/sse-server.js",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "test-startup": "node build/server.js",
+    "test-startup-sse": "node build/sse-server.js",
+    "start:sse": "npm run build && node build/sse-server.js",
+    "dev:sse": "tsc && node build/sse-server.js",
     "test": "npm run lint && npm run format:check && npm run build && npm run test-startup",
     "prepublishOnly": "npm run build"
   },
   "files": [
-    "build"
+    "build",
+    ".env.example"
   ],
   "repository": {
     "type": "git",
@@ -31,15 +36,21 @@
   },
   "homepage": "https://github.com/makeplane/plane-mcp-server#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.9.0",
+    "@modelcontextprotocol/sdk": "^1.17.0",
     "@scarf/scarf": "^1.4.0",
     "axios": "^1.8.4",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
     "zod-to-json-schema": "^3.24.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.25.0",
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
+    "@types/cors": "^2.8.19",
+    "@types/dotenv": "^6.1.1",
+    "@types/express": "^5.0.3",
     "@types/node": "^22.14.0",
     "@typescript-eslint/eslint-plugin": "^8.29.1",
     "@typescript-eslint/parser": "^8.29.1",
