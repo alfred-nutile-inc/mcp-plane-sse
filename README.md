@@ -1,5 +1,9 @@
 # Plane MCP Server (SSE)
 
+
+
+
+
 The Plane MCP Server brings the power of Model Context Protocol (MCP) to Plane using Server-Sent Events (SSE) transport, allowing AI agents and developer tools to interact programmatically with your Plane workspace over HTTP.
 
 Whether you're building intelligent assistants, automation scripts, or workflow-driven tools, this server provides a seamless HTTP-based bridge to Plane's API—so you can create projects, manage issues, assign tasks, and keep your work in sync with AI-powered tools.
@@ -13,6 +17,12 @@ This server unlocks all sorts of useful capabilities for anyone working with Pla
 - Organize work with labels, modules, and cycles.
 - Analyze data about your team's work across projects.
 - Build smart apps that interact naturally with Plane—whether it's an AI agent logging work, or a bot keeping projects tidy.
+
+## TODO
+
+  * [ ] get_user is not working
+  * [ ] list_issue_types works but n8n seems to not pass the project_id
+
 
 ## Quick Start
 
