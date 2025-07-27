@@ -35,34 +35,48 @@ async function main() {
 
   // SSE endpoint - establishes the Server-Sent Events stream
   app.get("/sse", async (req, res) => {
-    console.log("Received GET request to /sse - establishing SSE connection");
+    console.log("[SSE DEBUG] Received GET request to /sse - establishing SSE connection");
+    const customSessionId = req.query.sessionId as string;
 
     try {
       const transport = new SSEServerTransport("/messages", res);
-      const sessionId = transport.sessionId;
+      const originalSessionId = transport.sessionId;
+      
+      // Use custom session ID if provided, otherwise use the generated one
+      const sessionId = customSessionId || originalSessionId;
+      
+      console.log(`[SSE DEBUG] Original sessionId: ${originalSessionId}`);
+      if (customSessionId) {
+        console.log(`[SSE DEBUG] Using custom sessionId: ${sessionId}`);
+        // Override the session ID in the transport
+        (transport as any)._sessionId = sessionId;
+      } else {
+        console.log(`[SSE DEBUG] Using generated sessionId: ${sessionId}`);
+      }
 
       // Store the transport
       transports[sessionId] = transport;
 
       // Set up cleanup when connection closes
       res.on("close", () => {
-        console.log(`SSE connection closed for session ${sessionId}`);
+        console.log(`[SSE DEBUG] SSE connection closed for session ${sessionId}`);
         delete transports[sessionId];
       });
 
       // Set up error handling
       transport.onerror = (error) => {
-        console.error(`Transport error for session ${sessionId}:`, error);
+        console.error(`[SSE DEBUG] Transport error for session ${sessionId}:`, error);
         delete transports[sessionId];
       };
 
       // Create and connect the MCP server
       const { server, version } = createServer();
+      console.log(`[SSE DEBUG] Created MCP server, connecting to transport...`);
       await server.connect(transport);
 
-      console.log(`Plane MCP Server (SSE) connected for session ${sessionId}: ${version}`);
+      console.log(`[SSE DEBUG] Plane MCP Server (SSE) connected for session ${sessionId}: ${version}`);
     } catch (error) {
-      console.error("Error establishing SSE connection:", error);
+      console.error("[SSE DEBUG] Error establishing SSE connection:", error);
       if (!res.headersSent) {
         res.status(500).json({
           error: "Failed to establish SSE connection",
@@ -76,7 +90,11 @@ async function main() {
   app.post("/messages", async (req, res) => {
     const sessionId = req.query.sessionId as string;
 
+    console.log(`[SSE DEBUG] Received POST to /messages with sessionId: ${sessionId}`);
+    console.log(`[SSE DEBUG] Request body:`, JSON.stringify(req.body, null, 2));
+
     if (!sessionId) {
+      console.log(`[SSE DEBUG] Missing sessionId in request`);
       return res.status(400).json({
         error: "Missing sessionId query parameter",
       });
@@ -84,16 +102,20 @@ async function main() {
 
     const transport = transports[sessionId];
     if (!transport) {
+      console.log(`[SSE DEBUG] No transport found for sessionId: ${sessionId}`);
+      console.log(`[SSE DEBUG] Available sessions:`, Object.keys(transports));
       return res.status(404).json({
         error: "Transport not found for sessionId",
         sessionId,
       });
     }
 
+    console.log(`[SSE DEBUG] Found transport for session ${sessionId}, handling message`);
     try {
       await transport.handlePostMessage(req, res, req.body);
+      console.log(`[SSE DEBUG] Successfully handled message for session ${sessionId}`);
     } catch (error) {
-      console.error(`Error handling POST message for session ${sessionId}:`, error);
+      console.error(`[SSE DEBUG] Error handling POST message for session ${sessionId}:`, error);
       if (!res.headersSent) {
         res.status(500).json({
           error: "Failed to handle message",

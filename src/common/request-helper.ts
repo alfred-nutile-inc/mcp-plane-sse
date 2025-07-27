@@ -8,6 +8,7 @@ export async function makePlaneRequest<T>(method: string, path: string, body: an
     "X-API-Key": process.env.PLANE_API_KEY || "",
   };
 
+
   // Only add Content-Type for non-GET requests
   if (method.toUpperCase() !== "GET") {
     headers["Content-Type"] = "application/json";
