@@ -59,7 +59,7 @@ PLANE MCP SERVER - SSE TRANSPORT
 
 Endpoints:
 - Health check: GET http://localhost:3000/health
-- SSE stream:   GET http://localhost:3000/sse  
+- SSE stream:   GET http://localhost:3000/sse
 - Messages:     POST http://localhost:3000/messages?sessionId=<id>
 ```
 
@@ -247,6 +247,287 @@ async function callTool(name, args) {
 The SSE server is compatible with any MCP client that supports HTTP+SSE transport. Configure your client to:
 - Connect to the SSE endpoint for receiving messages
 - Send POST requests to the messages endpoint for outgoing communication
+
+## Production Deployment
+
+### Systemd Service Configuration
+
+For production deployment on Linux servers, you can run the SSE server as a systemd service. This approach uses separate folders for each workspace with their own project files and `.env` configuration.
+
+#### Setup Overview
+
+Each workspace gets its own:
+- Project directory (e.g., `/opt/plane-mcp-workspace1/`)
+- `.env` file with workspace-specific configuration
+- systemd service that runs `npm run start:sse`
+
+#### Single Workspace Setup
+
+1. **Create workspace directory and clone project**:
+```bash
+# Create directory for workspace 1
+sudo mkdir -p /opt/plane-mcp-workspace1
+cd /opt/plane-mcp-workspace1
+
+# Clone the project
+sudo git clone git@github.com:alfred-nutile-inc/mcp-plane-sse.git .
+
+# Install dependencies
+sudo npm install
+sudo npm run build
+```
+
+2. **Create .env file for the workspace**:
+```bash
+sudo tee /opt/plane-mcp-workspace1/.env << EOF
+PLANE_API_KEY=your-plane-api-key
+PLANE_WORKSPACE_SLUG=your-workspace-slug
+PLANE_API_HOST_URL=https://api.plane.so/
+PORT=3000
+EOF
+```
+
+3. **Create system user**:
+```bash
+# Create system user
+sudo useradd --system \
+  --home /opt/plane-mcp \
+  --shell /bin/false \
+  --comment "Plane MCP Server" \
+  plane-mcp
+
+# Set ownership of workspace directory
+sudo chown -R plane-mcp:plane-mcp /opt/plane-mcp-workspace1
+```
+
+4. **Create systemd service**:
+```bash
+sudo tee /etc/systemd/system/plane-mcp-workspace1.service << EOF
+[Unit]
+Description=Plane MCP Server - Workspace1
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=plane-mcp
+Group=plane-mcp
+WorkingDirectory=/opt/plane-mcp-workspace1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/npm run start:sse
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plane-mcp-workspace1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+
+5. **Enable and start service**:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable plane-mcp-workspace1
+sudo systemctl start plane-mcp-workspace1
+sudo systemctl status plane-mcp-workspace1
+```
+
+#### Multiple Workspace Setup
+
+For multiple workspaces, repeat the process with different directories and ports:
+
+1. **Create directories for each workspace**:
+```bash
+# Workspace 1 (port 3000)
+sudo mkdir -p /opt/plane-mcp-workspace1
+cd /opt/plane-mcp-workspace1
+sudo git clone https://github.com/makeplane/plane-mcp-server.git .
+sudo npm install && sudo npm run build
+
+sudo tee /opt/plane-mcp-workspace1/.env << EOF
+PLANE_API_KEY=workspace1-api-key
+PLANE_WORKSPACE_SLUG=workspace1-slug
+PLANE_API_HOST_URL=https://workspace1.plane.so/
+PORT=3000
+EOF
+
+# Workspace 2 (port 3001)
+sudo mkdir -p /opt/plane-mcp-workspace2
+cd /opt/plane-mcp-workspace2
+sudo git clone https://github.com/makeplane/plane-mcp-server.git .
+sudo npm install && sudo npm run build
+
+sudo tee /opt/plane-mcp-workspace2/.env << EOF
+PLANE_API_KEY=workspace2-api-key
+PLANE_WORKSPACE_SLUG=workspace2-slug
+PLANE_API_HOST_URL=https://workspace2.plane.so/
+PORT=3001
+EOF
+```
+
+2. **Set ownership for all workspaces**:
+```bash
+sudo chown -R plane-mcp:plane-mcp /opt/plane-mcp-workspace1
+sudo chown -R plane-mcp:plane-mcp /opt/plane-mcp-workspace2
+```
+
+3. **Create systemd services for each workspace**:
+```bash
+sudo tee /etc/systemd/system/plane-mcp-workspace1.service << EOF
+[Unit]
+Description=Plane MCP Server - Workspace1
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=plane-mcp
+Group=plane-mcp
+WorkingDirectory=/var/lib/plane-mcp
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/plane-mcp/workspace1.env
+ExecStart=/var/lib/plane-mcp/start-server.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/plane-mcp-workspace1.log
+StandardError=append:/var/log/plane-mcp-workspace1-error.log
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/plane-mcp
+ReadWritePaths=/var/log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+# Service for workspace 2
+sudo tee /etc/systemd/system/plane-mcp-workspace2.service << EOF
+[Unit]
+Description=Plane MCP Server - Workspace2
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=plane-mcp
+Group=plane-mcp
+WorkingDirectory=/opt/plane-mcp-workspace2
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/npm run start:sse
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plane-mcp-workspace2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+4. **Enable and start all services**:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable plane-mcp-workspace1 plane-mcp-workspace2
+sudo systemctl start plane-mcp-workspace1 plane-mcp-workspace2
+```
+
+#### Service Management Commands
+
+```bash
+# Check service status
+sudo systemctl status plane-mcp-workspace1
+sudo systemctl status plane-mcp-workspace2
+
+# View logs
+sudo journalctl -u plane-mcp-workspace1 -f
+sudo journalctl -u plane-mcp-workspace2 -f
+
+# Restart services
+sudo systemctl restart plane-mcp-workspace1
+sudo systemctl restart plane-mcp-workspace2
+
+# Stop services
+sudo systemctl stop plane-mcp-workspace1
+sudo systemctl stop plane-mcp-workspace2
+```
+
+#### Nginx Reverse Proxy (Optional)
+
+For production use, you might want to put the services behind nginx:
+
+```nginx
+# /etc/nginx/sites-available/plane-mcp
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # Workspace 1
+    location /workspace1/ {
+        proxy_pass http://localhost:3000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Workspace 2
+    location /workspace2/ {
+        proxy_pass http://localhost:3001/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Enable the nginx configuration:
+```bash
+sudo ln -s /etc/nginx/sites-available/plane-mcp /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+#### Firewall Configuration
+
+```bash
+# Allow specific ports
+sudo ufw allow 3000/tcp
+sudo ufw allow 3001/tcp
+
+# Or if using nginx proxy
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
+
+#### Monitoring and Health Checks
+
+Each service exposes a health endpoint:
+```bash
+# Check workspace 1
+curl http://localhost:3000/health
+
+# Check workspace 2
+curl http://localhost:3001/health
+```
+
+You can set up monitoring tools like Prometheus or simple cron jobs to monitor these endpoints.
 
 ## License
 
